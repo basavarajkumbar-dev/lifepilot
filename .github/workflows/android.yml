@@ -1,0 +1,148 @@
+name: Android CI
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unit tests + debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and run unit tests
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug assembleRelease 2>&1 | tee build.log
+
+      - name: Report compiler/build errors as annotations
+        if: failure()
+        run: |
+          # Annotations are readable through the public checks API, so failures can be diagnosed without log access.
+          msg=$(grep -E '^e: |What went wrong|FAILED|Could not|error:|> ' build.log | grep -v '^> Task' | head -n 80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Build failure::${msg:0:60000}"
+
+      - name: Summarize unit test results
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          t=f=e=s=0; failed=[]
+          for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml'):
+              r=ET.parse(p).getroot()
+              t+=int(r.get('tests',0)); f+=int(r.get('failures',0)); e+=int(r.get('errors',0)); s+=int(r.get('skipped',0))
+              for c in r.iter('testcase'):
+                  for bad in list(c.findall('failure'))+list(c.findall('error')):
+                      failed.append(f"{c.get('classname')}.{c.get('name')}: {(bad.get('message') or '')[:300]}")
+          print(f"::notice title=Unit tests::total={t} failures={f} errors={e} skipped={s}")
+          if failed:
+              print("::error title=Failed unit tests::" + "%0A".join(x.replace('%','%25').replace('\n',' ') for x in failed[:40]))
+          EOF
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifePilot-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release APK (debug-signed)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifePilot-release-apk
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            build.log
+            app/build/reports/
+            app/build/test-results/
+            app/schemas/
+
+  instrumented:
+    name: Instrumented + UI tests (emulator)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Pre-build (generates Room schema used by migration tests)
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew --no-daemon connectedDebugAndroidTest 2>&1 | tee connected.log
+
+      - name: Summarize instrumented test results
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          t=f=e=s=0; failed=[]
+          for p in glob.glob('app/build/outputs/androidTest-results/connected/**/*.xml', recursive=True):
+              r=ET.parse(p).getroot()
+              suites=[r] if r.tag=='testsuite' else list(r.iter('testsuite'))
+              for su in suites:
+                  t+=int(su.get('tests',0)); f+=int(su.get('failures',0)); e+=int(su.get('errors',0)); s+=int(su.get('skipped',0))
+                  for c in su.iter('testcase'):
+                      for bad in list(c.findall('failure'))+list(c.findall('error')):
+                          failed.append(f"{c.get('classname')}.{c.get('name')}: {((bad.text or bad.get('message') or '')[:400])}")
+          print(f"::notice title=Instrumented tests::total={t} failures={f} errors={e} skipped={s}")
+          if failed:
+              print("::error title=Failed instrumented tests::" + "%0A".join(x.replace('%','%25').replace('\n',' ') for x in failed[:30]))
+          EOF
+          if [ -f connected.log ]; then
+            msg=$(grep -E 'e: |What went wrong|FAILED|Exception|error:' connected.log | head -n 60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            [ -n "$msg" ] && echo "::warning title=Connected log excerpt::${msg:0:60000}"
+          fi
+
+      - name: Upload instrumented reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-reports
+          path: |
+            connected.log
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
