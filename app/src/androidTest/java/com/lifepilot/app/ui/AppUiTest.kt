@@ -8,7 +8,11 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
@@ -58,6 +62,13 @@ class AppUiTest {
 
     private fun waitForText(text: String, timeout: Long = 5000) = compose.waitUntilAtLeastOneExists(hasText(text, substring = true), timeout)
 
+    /** Scrolls a lazy list until a matching item is composed (lazy lists only compose visible items). */
+    private fun scrollListTo(listTag: String, matcher: SemanticsMatcher, timeout: Long = 5000) {
+        compose.waitUntil(timeout) { runCatching { compose.onNodeWithTag(listTag).performScrollToNode(matcher) }.isSuccess }
+    }
+
+    private fun waitForDb(timeout: Long = 5000, condition: suspend () -> Boolean) = compose.waitUntil(timeout) { runBlocking { condition() } }
+
     @Test fun onboardingFlowLeadsToHome() {
         runBlocking { container.settings.update { it.copy(onboardingCompleted = false) } }
         launch()
@@ -71,7 +82,7 @@ class AppUiTest {
 
     @Test fun emptyStatesAreShown() {
         launch()
-        waitForText("A clear day")
+        scrollListTo("home_list", hasText("A clear day"))
         compose.onNodeWithTag("tab_tasks").performClick()
         waitForText("No tasks yet")
         compose.onNodeWithTag("tab_insights").performClick()
@@ -83,7 +94,7 @@ class AppUiTest {
         compose.onNodeWithTag("fab_add").performClick()
         compose.onNodeWithTag("quickadd_input").performTextInput("Buy milk")
         compose.onNodeWithTag("quickadd_save").performClick()
-        waitForText("Buy milk")
+        waitForDb { container.tasks.observeItems().first().isNotEmpty() }
         val items = runBlocking { container.tasks.observeItems().first() }
         assertEquals(listOf("Buy milk"), items.map { it.task.title })
         assertEquals(LocalDate.now(), items.single().occurrence.dueDate)
@@ -95,8 +106,9 @@ class AppUiTest {
         waitForText("No tasks yet")
         compose.onNodeWithText("Create a task").performClick()
         compose.onNodeWithTag("editor_title").performTextInput("Study Python")
-        compose.onNodeWithTag("editor_save").performClick()
-        waitForText("Study Python")
+        compose.onNodeWithTag("editor_save").performScrollTo().performClick()
+        waitForDb { container.tasks.getAllTasks().isNotEmpty() }
+        scrollListTo("task_list", hasText("Study Python"))
         val task = runBlocking { container.tasks.getAllTasks() }.single()
         assertEquals("Study Python", task.title)
     }
@@ -107,7 +119,8 @@ class AppUiTest {
             container.tasks.occurrencesForTask(id).single().id
         }
         launch()
-        waitForText("Water plants")
+        compose.onNodeWithTag("tab_tasks").performClick()
+        scrollListTo("task_list", hasContentDescription("Complete Water plants"))
         compose.onNodeWithContentDescription("Complete Water plants").performClick()
         compose.waitUntil(5000) { runBlocking { container.tasks.getOccurrence(occId)?.status } == OccurrenceStatus.COMPLETED }
     }
@@ -119,7 +132,7 @@ class AppUiTest {
         }
         launch()
         compose.onNodeWithTag("tab_tasks").performClick()
-        waitForText("Call bank")
+        scrollListTo("task_list", hasText("Call bank"))
         compose.onNodeWithText("Call bank").performClick()
         compose.onNodeWithTag("detail_snooze").performClick()
         compose.onNodeWithTag("snooze_10").performClick()
@@ -130,14 +143,17 @@ class AppUiTest {
     @Test fun editAndDeleteTask() {
         runBlocking { container.taskService.createTask(TaskDraft(title = "Old title", dueDate = LocalDate.now())) }
         launch()
-        waitForText("Old title")
+        compose.onNodeWithTag("tab_tasks").performClick()
+        scrollListTo("task_list", hasText("Old title"))
         compose.onNodeWithText("Old title").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("detail_edit"), 5000)
         compose.onNodeWithTag("detail_edit").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("editor_title"), 5000)
         compose.onNodeWithTag("editor_title").performTextClearance()
         compose.onNodeWithTag("editor_title").performTextInput("New title")
-        compose.onNodeWithTag("editor_save").performClick()
-        waitForText("New title")
-        assertEquals("New title", runBlocking { container.tasks.getAllTasks().single().title })
+        compose.onNodeWithTag("editor_save_top").performClick()
+        waitForDb { container.tasks.getAllTasks().singleOrNull()?.title == "New title" }
+        compose.waitUntilAtLeastOneExists(hasTestTag("detail_title"), 5000)
 
         compose.onNodeWithContentDescription("More actions").performClick()
         compose.onNodeWithTag("detail_delete").performClick()
@@ -150,8 +166,9 @@ class AppUiTest {
         compose.onNodeWithTag("tab_habits").performClick()
         compose.onNodeWithTag("fab_add_habit").performClick()
         compose.onNodeWithTag("habit_name").performTextInput("Read")
-        compose.onNodeWithTag("habit_save").performClick()
-        waitForText("Not yet today")
+        compose.onNodeWithTag("habit_save").performScrollTo().performClick()
+        waitForDb { container.habits.getHabits().isNotEmpty() }
+        compose.waitUntilAtLeastOneExists(hasContentDescription("Mark Read done today"), 5000)
         compose.onNodeWithContentDescription("Mark Read done today").performClick()
         compose.waitUntil(5000) {
             runBlocking {
@@ -175,7 +192,7 @@ class AppUiTest {
         compose.onNodeWithTag("tab_tasks").performClick()
         waitForText("No tasks yet")
         compose.onNodeWithText("Create a task").performClick()
-        compose.onNodeWithTag("editor_save").performClick()
+        compose.onNodeWithTag("editor_save").performScrollTo().performClick()
         compose.waitUntilAtLeastOneExists(hasTestTag("editor_errors"), 5000)
         assertTrue(runBlocking { container.tasks.getAllTasks().isEmpty() })
     }

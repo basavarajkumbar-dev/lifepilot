@@ -53,6 +53,16 @@ jobs:
               print("::error title=Failed unit tests::" + "%0A".join(x.replace('%','%25').replace('\n',' ') for x in failed[:40]))
           EOF
 
+      - name: Report APK details (size, merged permissions)
+        if: success()
+        run: |
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          perms=$("$AAPT" dump permissions "$APK" | grep -o "name='[^']*'" | sed "s/name=//; s/'//g" | tr '\n' ' ')
+          echo "::notice title=APK::$(basename $APK) size=$(du -h $APK | cut -f1) sha256=$(sha256sum $APK | cut -c1-16) permissions: $perms"
+          REL=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "::notice title=Release APK::$(basename $REL) size=$(du -h $REL | cut -f1)"
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
@@ -112,7 +122,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew --no-daemon connectedDebugAndroidTest 2>&1 | tee connected.log
+          script: bash -c 'set -o pipefail; ./gradlew --no-daemon connectedDebugAndroidTest 2>&1 | tee connected.log'
 
       - name: Summarize instrumented test results
         if: always()
