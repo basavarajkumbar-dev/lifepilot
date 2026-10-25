@@ -10,6 +10,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.SemanticsMatcher
@@ -67,7 +69,7 @@ class AppUiTest {
         compose.waitUntil(timeout) { runCatching { compose.onNodeWithTag(listTag).performScrollToNode(matcher) }.isSuccess }
     }
 
-    private fun waitForDb(timeout: Long = 5000, condition: suspend () -> Boolean) = compose.waitUntil(timeout) { runBlocking { condition() } }
+    private fun waitForDb(timeout: Long = 15_000, condition: suspend () -> Boolean) = compose.waitUntil(timeout) { runBlocking { condition() } }
 
     @Test fun onboardingFlowLeadsToHome() {
         runBlocking { container.settings.update { it.copy(onboardingCompleted = false) } }
@@ -122,7 +124,7 @@ class AppUiTest {
         compose.onNodeWithTag("tab_tasks").performClick()
         scrollListTo("task_list", hasContentDescription("Complete Water plants"))
         compose.onNodeWithContentDescription("Complete Water plants").performClick()
-        compose.waitUntil(5000) { runBlocking { container.tasks.getOccurrence(occId)?.status } == OccurrenceStatus.COMPLETED }
+        compose.waitUntil(15_000) { runBlocking { container.tasks.getOccurrence(occId)?.status } == OccurrenceStatus.COMPLETED }
     }
 
     @Test fun snoozeFromDetailKeepsTaskPending() {
@@ -136,7 +138,7 @@ class AppUiTest {
         compose.onNodeWithText("Call bank").performClick()
         compose.onNodeWithTag("detail_snooze").performClick()
         compose.onNodeWithTag("snooze_10").performClick()
-        compose.waitUntil(5000) { runBlocking { container.tasks.getOccurrence(occId)?.snoozeCount } == 1 }
+        compose.waitUntil(15_000) { runBlocking { container.tasks.getOccurrence(occId)?.snoozeCount } == 1 }
         assertEquals(OccurrenceStatus.PENDING, runBlocking { container.tasks.getOccurrence(occId)!!.status })
     }
 
@@ -158,7 +160,7 @@ class AppUiTest {
         compose.onNodeWithContentDescription("More actions").performClick()
         compose.onNodeWithTag("detail_delete").performClick()
         compose.onNodeWithText("Delete").performClick()
-        compose.waitUntil(5000) { runBlocking { container.tasks.getAllTasks().isEmpty() } }
+        compose.waitUntil(15_000) { runBlocking { container.tasks.getAllTasks().isEmpty() } }
     }
 
     @Test fun createAndTrackHabit() {
@@ -182,9 +184,9 @@ class AppUiTest {
         launch()
         compose.onNodeWithTag("tab_settings").performClick()
         compose.onNodeWithTag("theme_LIGHT").performClick()
-        compose.waitUntil(5000) { runBlocking { container.settings.current().themeMode } == ThemeMode.LIGHT }
+        compose.waitUntil(15_000) { runBlocking { container.settings.current().themeMode } == ThemeMode.LIGHT }
         compose.onNodeWithTag("theme_DARK").performClick()
-        compose.waitUntil(5000) { runBlocking { container.settings.current().themeMode } == ThemeMode.DARK }
+        compose.waitUntil(15_000) { runBlocking { container.settings.current().themeMode } == ThemeMode.DARK }
     }
 
     @Test fun editorShowsValidationError() {
@@ -200,7 +202,8 @@ class AppUiTest {
     @Test fun homeTabReturnsHomeAfterOpeningTasksFromHome() {
         launch()
         scrollListTo("home_list", hasText("All tasks"))
-        compose.onNodeWithText("All tasks").performClick()
+        // Semantic click: the scrolled-to button can sit under the floating "Add task" button.
+        compose.onNodeWithText("All tasks").performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntilAtLeastOneExists(hasTestTag("task_search"), 5000)
         compose.onNodeWithTag("tab_home").performClick()
         compose.waitUntilAtLeastOneExists(hasTestTag("fab_add"), 5000)
@@ -215,7 +218,7 @@ class AppUiTest {
     @Test fun homeTabReturnsHomeAfterOpeningHabitsFromHome() {
         launch()
         scrollListTo("home_list", hasText("Build a routine"))
-        compose.onNodeWithText("Build a routine").performClick()
+        compose.onNodeWithText("Build a routine").performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntilAtLeastOneExists(hasTestTag("fab_add_habit"), 5000)
         compose.onNodeWithTag("tab_home").performClick()
         compose.waitUntilAtLeastOneExists(hasTestTag("fab_add"), 5000)

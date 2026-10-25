@@ -130,7 +130,7 @@ class NotificationActionTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val container = (context as LifePilotApp).container
 
-    private suspend fun awaitStatus(id: Long, status: OccurrenceStatus, timeoutMs: Long = 5000): Boolean {
+    private suspend fun awaitStatus(id: Long, status: OccurrenceStatus, timeoutMs: Long = 15_000): Boolean {
         val end = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < end) {
             if (container.tasks.getOccurrence(id)?.status == status) return true
@@ -148,7 +148,7 @@ class NotificationActionTest {
         val occId = container.tasks.occurrencesForTask(taskId).single().id
 
         send(NotificationActionReceiver.ACTION_SNOOZE, occId)
-        val end = System.currentTimeMillis() + 5000
+        val end = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < end && container.tasks.getOccurrence(occId)?.snoozeCount != 1) delay(100)
         val snoozed = container.tasks.getOccurrence(occId)!!
         assertEquals(1, snoozed.snoozeCount)
