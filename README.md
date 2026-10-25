@@ -87,7 +87,10 @@ app/src/main/java/com/lifepilot/app/
 | `POST_NOTIFICATIONS` | Show reminders (runtime permission on Android 13+; requested from onboarding / Reliability screen, never automatically). |
 | `SCHEDULE_EXACT_ALARM` | Deliver reminders at the exact minute. On Android 12+ the user grants "Alarms & reminders"; without it the app falls back to inexact alarms and says so. `USE_EXACT_ALARM` is deliberately not used. |
 | `RECEIVE_BOOT_COMPLETED` | Re-create alarms after a restart (Android clears all alarms on reboot). |
-| `WAKE_LOCK`, `FOREGROUND_SERVICE`, `ACCESS_NETWORK_STATE` *(merged from WorkManager)* | Added automatically by the WorkManager library for its own scheduling; LifePilot itself never uses the network. |
+| `WAKE_LOCK`, `FOREGROUND_SERVICE`, `ACCESS_NETWORK_STATE` *(merged from WorkManager)* | Added automatically by the WorkManager library for its own job scheduling; LifePilot itself never uses the network. |
+| `com.lifepilot.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` *(merged from AndroidX Core)* | App-private, signature-level permission AndroidX uses to keep runtime-registered receivers internal to the app. |
+
+The list above is the actual merged manifest of the built APK (reported by `aapt dump permissions` in CI).
 
 There is **no `INTERNET` permission**. Auto Backup is disabled (`allowBackup=false`) so data is not copied to the cloud; use the in-app JSON backup instead.
 
@@ -97,7 +100,19 @@ There is **no `INTERNET` permission**. Auto Backup is disabled (`allowBackup=fal
 - **Instrumented tests** (`app/src/androidTest`): Room persistence across reopen, unique-occurrence constraint, conditional completion, cascades/category reassignment, exported-schema validation via `MigrationTestHelper`, real Room + TaskService coordination, real AlarmManager PendingIntent identity, notification action broadcasts (snooze/complete) through the real receiver.
 - **Compose UI tests**: onboarding, empty states, quick-add, full editor, completing from the list, snoozing from detail, edit + delete, habit creation and check-off, theme switching, editor validation errors.
 
-See **Verification status** below for what was actually executed.
+## Verification status
+
+Executed on GitHub Actions ([Android CI](../../actions/workflows/android.yml)), commit `699e2f6`:
+
+| Check | Result |
+|---|---|
+| `assembleDebug` / `assembleRelease` | ✅ built — `app-debug.apk` 19 MB, `app-release.apk` 2.1 MB (R8-minified) |
+| JVM unit tests (`testDebugUnitTest`) | ✅ **114 passed, 0 failed** |
+| Instrumented + Compose UI tests (`connectedDebugAndroidTest`, Android 14 / API 34 x86_64 emulator) | ✅ **18 passed, 0 failed** |
+
+During development the domain tests were also run locally with the Kotlin 2.1.21 compiler (first run found a real bug — recurring tasks generated an extra future occurrence on every reconcile — which was fixed and is covered by tests).
+
+**Not verified on a physical device** (no device was available to this build): notifications appearing on screen and being tapped, sound/vibration, behaviour after a real reboot, exact timing under Doze, manufacturer-specific battery restrictions, and the exact-alarm permission grant screen. The notification action receivers, alarm identities and boot/timezone reconciliation logic are covered by automated tests, but please use **Settings → Reminder reliability → Send test reminder** on your phone to confirm end-to-end delivery.
 
 ## Known limitations
 
