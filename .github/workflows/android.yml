@@ -116,10 +116,17 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Pre-build (generates Room schema used by migration tests)
+      - name: Pre-build app and test APKs
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+          set -o pipefail
+          ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest 2>&1 | tee prebuild.log
+
+      - name: Report pre-build errors as annotations
+        if: failure()
+        run: |
+          msg=$(grep -E '^e: |What went wrong|FAILED|Could not|error:|> |Reason|problem' prebuild.log | grep -v '^> Task' | head -n 80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Pre-build failure::${msg:0:60000}"
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2

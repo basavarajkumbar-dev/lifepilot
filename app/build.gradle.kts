@@ -42,10 +42,6 @@ android {
         compose = true
         buildConfig = true
     }
-    sourceSets {
-        // Exported Room schemas are used by MigrationTestHelper in instrumentation tests.
-        getByName("androidTest").assets.srcDir("$projectDir/schemas")
-    }
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
