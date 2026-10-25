@@ -158,7 +158,7 @@ jobs:
           EOF
           if [ -f connected.log ]; then
             msg=$(grep -E 'e: |What went wrong|FAILED|Exception|error:' connected.log | head -n 60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
-            [ -n "$msg" ] && echo "::warning title=Connected log excerpt::${msg:0:60000}"
+            if [ -n "$msg" ]; then echo "::warning title=Connected log excerpt::${msg:0:60000}"; fi
           fi
 
       - name: Upload instrumented reports
