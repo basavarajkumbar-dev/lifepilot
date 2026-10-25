@@ -196,4 +196,29 @@ class AppUiTest {
         compose.waitUntilAtLeastOneExists(hasTestTag("editor_errors"), 5000)
         assertTrue(runBlocking { container.tasks.getAllTasks().isEmpty() })
     }
+
+    @Test fun homeTabReturnsHomeAfterOpeningTasksFromHome() {
+        launch()
+        scrollListTo("home_list", hasText("All tasks"))
+        compose.onNodeWithText("All tasks").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("task_search"), 5000)
+        compose.onNodeWithTag("tab_home").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("fab_add"), 5000)
+        compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("task_search")).fetchSemanticsNodes().isEmpty() }
+        // And again, to make sure the second round trip behaves the same.
+        compose.onNodeWithTag("tab_tasks").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("task_search"), 5000)
+        compose.onNodeWithTag("tab_home").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("fab_add"), 5000)
+    }
+
+    @Test fun homeTabReturnsHomeAfterOpeningHabitsFromHome() {
+        launch()
+        scrollListTo("home_list", hasText("Build a routine"))
+        compose.onNodeWithText("Build a routine").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("fab_add_habit"), 5000)
+        compose.onNodeWithTag("tab_home").performClick()
+        compose.waitUntilAtLeastOneExists(hasTestTag("fab_add"), 5000)
+        compose.waitUntil(5000) { compose.onAllNodes(hasTestTag("fab_add_habit")).fetchSemanticsNodes().isEmpty() }
+    }
 }

@@ -152,6 +152,25 @@ private fun MainScaffold(pendingRoute: StateFlow<String?>, onRouteConsumed: () -
     }
 }
 
+/**
+ * Switches to a top-level tab.
+ *
+ * Home is the start destination, so "going home" means popping everything above it. It must not
+ * use restoreState: the state saved for the start destination contains whatever was stacked on top
+ * of Home, and restoring it would put the user right back on the screen they were leaving.
+ */
+internal fun NavHostController.navigateToTab(route: String, restore: Boolean = true) {
+    if (route == Routes.HOME) {
+        if (!popBackStack(Routes.HOME, inclusive = false)) navigate(Routes.HOME) { launchSingleTop = true }
+        return
+    }
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = restore
+    }
+}
+
 @Composable
 private fun BottomBar(nav: NavHostController, currentRoute: String?) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 0.dp) {
@@ -160,11 +179,7 @@ private fun BottomBar(nav: NavHostController, currentRoute: String?) {
             NavigationBarItem(
                 selected = selected,
                 onClick = {
-                    nav.navigate(tab.route) {
-                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    nav.navigateToTab(tab.route)
                 },
                 icon = { Icon(tab.icon, contentDescription = null) },
                 label = { Text(tab.label) },
@@ -197,8 +212,10 @@ private fun AppNavHost(nav: NavHostController, modifier: Modifier, padding: andr
                 contentPadding = padding,
                 onQuickAdd = onQuickAdd,
                 onOpenOccurrence = { nav.navigate(Routes.occurrence(it)) },
-                onOpenTasks = { nav.navigate(Routes.tasks(it)) },
-                onOpenHabits = { nav.navigate(Routes.HABITS) },
+                // Shortcuts to other tabs switch tabs (like the bottom bar) instead of stacking on Home.
+                // A filtered Tasks link opens fresh so the requested filter is applied.
+                onOpenTasks = { nav.navigateToTab(Routes.tasks(it), restore = false) },
+                onOpenHabits = { nav.navigateToTab(Routes.HABITS) },
                 onOpenCalendar = { nav.navigate(Routes.CALENDAR) },
                 onOpenPlan = { nav.navigate(Routes.PLAN) },
                 onOpenReview = { nav.navigate(Routes.REVIEW) },
