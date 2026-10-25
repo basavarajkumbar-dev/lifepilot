@@ -93,7 +93,7 @@ class AppUiTest {
         launch()
         compose.onNodeWithTag("fab_add").performClick()
         compose.onNodeWithTag("quickadd_input").performTextInput("Buy milk")
-        compose.onNodeWithTag("quickadd_save").performClick()
+        compose.onNodeWithTag("quickadd_save").performScrollTo().performClick()
         waitForDb { container.tasks.observeItems().first().isNotEmpty() }
         val items = runBlocking { container.tasks.observeItems().first() }
         assertEquals(listOf("Buy milk"), items.map { it.task.title })

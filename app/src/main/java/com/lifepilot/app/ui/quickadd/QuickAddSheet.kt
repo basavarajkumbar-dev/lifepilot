@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -109,7 +111,7 @@ fun QuickAddSheet(onDismiss: () -> Unit, onOpenFullEditor: (LocalDate?) -> Unit)
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-        Column(Modifier.padding(horizontal = Spacing.screen).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.screen).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Text("Quick add", style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(
                 value = text,

@@ -63,6 +63,13 @@ jobs:
           REL=$(ls app/build/outputs/apk/release/*.apk | head -1)
           echo "::notice title=Release APK::$(basename $REL) size=$(du -h $REL | cut -f1)"
 
+      - name: Report exported Room schema
+        if: success()
+        run: |
+          for f in $(find app/schemas -name '*.json'); do
+            echo "::notice title=Room schema $(basename $f)::$(gzip -9c $f | base64 -w0)"
+          done
+
       - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
