@@ -1,34 +1,48 @@
 package com.lifepilot.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Text
-import androidx.room.Dao
-import androidx.room.Database
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.Query
-import androidx.room.RoomDatabase
+import androidx.activity.enableEdgeToEdge
+import com.lifepilot.app.ui.navigation.LifePilotRoot
+import kotlinx.coroutines.flow.MutableStateFlow
 
-// Temporary dependency-resolution probe; replaced by the real app.
 class MainActivity : ComponentActivity() {
+
+    /** Route requested by a notification tap ("Open"), consumed by the navigation host. */
+    private val pendingRoute = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { Text("LifePilot") }
+        enableEdgeToEdge()
+        if (savedInstanceState == null) handleIntent(intent)
+        val container = (application as LifePilotApp).container
+        setContent {
+            LifePilotRoot(container = container, pendingRoute = pendingRoute, onRouteConsumed = { pendingRoute.value = null })
+        }
     }
-}
 
-@Entity
-data class ProbeEntity(@PrimaryKey val id: Long)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
 
-@Dao
-interface ProbeDao {
-    @Query("SELECT * FROM ProbeEntity")
-    suspend fun all(): List<ProbeEntity>
-}
+    private fun handleIntent(intent: Intent?) {
+        routeFor(intent)?.let { pendingRoute.value = it }
+    }
 
-@Database(entities = [ProbeEntity::class], version = 1)
-abstract class ProbeDb : RoomDatabase() {
-    abstract fun dao(): ProbeDao
+    companion object {
+        /** Maps lifepilot://occurrence/{id} and lifepilot://habit/{id} to navigation routes. */
+        fun routeFor(intent: Intent?): String? {
+            val uri = intent?.data ?: return null
+            if (uri.scheme != "lifepilot") return null
+            val id = uri.lastPathSegment?.toLongOrNull() ?: return null
+            return when (uri.host) {
+                "occurrence" -> "occurrence/$id"
+                "habit" -> "habit/$id"
+                else -> null
+            }
+        }
+    }
 }
